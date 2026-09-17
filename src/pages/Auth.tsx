@@ -1,0 +1,181 @@
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import {
+  signInWithPassword, signInWithGoogle, sendPasswordReset, registerSchool,
+} from '../lib/auth'
+
+type Mode = 'signin' | 'register' | 'reset'
+
+const SCHOOL_TYPES = ['Nursery', 'Primary', 'Secondary', 'Nursery & Primary', 'Primary & Secondary']
+
+export default function Auth() {
+  const [mode, setMode] = useState<Mode>('signin')
+  const { session, refresh } = useAuth()
+  const navigate = useNavigate()
+
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [schoolName, setSchoolName] = useState('')
+  const [schoolType, setSchoolType] = useState(SCHOOL_TYPES[2])
+  const [address, setAddress] = useState('')
+  const [state, setState] = useState('')
+  const [lga, setLga] = useState('')
+  const [phone, setPhone] = useState('')
+
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (session) navigate('/school')
+  }, [session]) // eslint-disable-line
+
+  const handleSignIn = async () => {
+    setSubmitting(true)
+    setError('')
+    const { error } = await signInWithPassword(email, password)
+    setSubmitting(false)
+    if (error) return setError(error.message)
+    await refresh()
+    navigate('/school')
+  }
+
+  const handleGoogle = async () => {
+    setError('')
+    const { error } = await signInWithGoogle()
+    if (error) setError(error.message)
+    // on success, Supabase redirects away — nothing else to do here
+  }
+
+  const handleReset = async () => {
+    setSubmitting(true)
+    setError('')
+    const { error } = await sendPasswordReset(email)
+    setSubmitting(false)
+    if (error) return setError(error.message)
+    setNotice('Check your email for a password reset link.')
+  }
+
+  const handleRegister = async () => {
+    setSubmitting(true)
+    setError('')
+    const result = await registerSchool({
+      email, password, principalName: fullName, schoolName, schoolType, address, state, lga, phone,
+    })
+    setSubmitting(false)
+    if (result.error) return setError(result.error.message)
+
+    if (result.needsEmailConfirmation) {
+      setNotice('Check your email to confirm your account, then sign in — your school registration will finish setting up and go to pending approval.')
+      setMode('signin')
+      return
+    }
+    setNotice(`Your registration for ${schoolName} is pending approval. You can sign in any time to check the status.`)
+    setMode('signin')
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-paper px-4 py-10">
+      <div className="w-full max-w-md rounded-2xl border border-line bg-white p-8 shadow-sm">
+        <div className="mb-6 text-center">
+          <span className="mx-auto flex h-9 w-9 items-center justify-center rounded bg-navy text-sm font-semibold text-white">
+            MR
+          </span>
+          <h1 className="mt-3 font-serif text-2xl font-semibold text-navy-deep">
+            {mode === 'signin' ? 'Sign in' : mode === 'register' ? 'Register your school' : 'Reset your password'}
+          </h1>
+          <p className="mt-1 text-sm text-ink/60">
+            Students don't need an account — they check results with a PIN on the home page.
+          </p>
+        </div>
+
+        {notice && <p className="mb-4 rounded-lg bg-success/10 px-3 py-2 text-sm text-success">{notice}</p>}
+        {error && <p className="mb-4 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
+
+        <div className="space-y-3">
+          {mode === 'register' && (
+            <>
+              <Field label="Your full name" value={fullName} onChange={setFullName} />
+              <Field label="School name" value={schoolName} onChange={setSchoolName} />
+              <div>
+                <label className="mb-1 block text-sm font-medium text-ink/70">School type</label>
+                <select value={schoolType} onChange={(e) => setSchoolType(e.target.value)}
+                  className="w-full rounded-lg border border-line bg-white py-2.5 px-3 text-sm outline-none focus:border-navy">
+                  {SCHOOL_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <Field label="Address" value={address} onChange={setAddress} />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="State" value={state} onChange={setState} />
+                <Field label="LGA" value={lga} onChange={setLga} />
+              </div>
+              <Field label="Phone" value={phone} onChange={setPhone} />
+            </>
+          )}
+
+          <Field label="Email" value={email} onChange={setEmail} type="email" />
+          {mode !== 'reset' && <Field label="Password" value={password} onChange={setPassword} type="password" />}
+
+          <button
+            onClick={mode === 'signin' ? handleSignIn : mode === 'register' ? handleRegister : handleReset}
+            disabled={submitting}
+            className="w-full rounded-lg bg-navy py-3 text-sm font-semibold text-white hover:bg-navy-deep disabled:opacity-60"
+          >
+            {submitting ? 'Please wait…' :
+              mode === 'signin' ? 'Sign in' : mode === 'register' ? 'Register school' : 'Send reset link'}
+          </button>
+
+          {mode === 'signin' && (
+            <>
+              <div className="flex items-center gap-3 text-xs text-ink/40">
+                <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
+              </div>
+              <button
+                onClick={handleGoogle}
+                className="w-full rounded-lg border border-line py-2.5 text-sm font-medium hover:border-navy"
+              >
+                Continue with Google
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="mt-6 flex flex-col items-center gap-2 text-sm text-ink/60">
+          {mode === 'signin' && (
+            <>
+              <button onClick={() => { setMode('register'); setError(''); setNotice('') }} className="font-medium text-navy hover:underline">
+                No school account yet? Register
+              </button>
+              <button onClick={() => { setMode('reset'); setError(''); setNotice('') }} className="hover:underline">
+                Forgot password?
+              </button>
+            </>
+          )}
+          {mode !== 'signin' && (
+            <button onClick={() => { setMode('signin'); setError(''); setNotice('') }} className="font-medium text-navy hover:underline">
+              Back to sign in
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Field({
+  label, value, onChange, type = 'text',
+}: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-medium text-ink/70">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-line bg-white py-2.5 px-3 text-sm outline-none focus:border-navy focus:ring-1 focus:ring-navy"
+      />
+    </div>
+  )
+    }
