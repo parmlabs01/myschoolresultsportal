@@ -127,7 +127,7 @@ export default function Results() {
 
     setSaving(false)
     setMessage('Saved as draft.')
-    setExistingResult({ id: resultId, student_id: studentId, status: 'DRAFT' })
+    setExistingResult({ id: resultId as string, student_id: studentId, status: 'DRAFT' })
   }
 
   const handlePublish = async () => {
@@ -277,4 +277,4 @@ function Select({
       </select>
     </div>
   )
-}
+    }
